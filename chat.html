@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<title>P2P Messenger с профилями</title>
+<title>P2P Messenger с профилями и цветами</title>
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 <style>
 body { margin:0; font-family:Arial; background:#0f1117; color:white; display:flex; flex-direction:column; align-items:center; }
@@ -15,9 +15,9 @@ header img { width:50px; height:50px; border-radius:50%; }
 .msg img.avatar { width:30px; height:30px; border-radius:50%; }
 .msg span { background:#6c7cff; padding:6px 10px; border-radius:10px; cursor:pointer; }
 .msg img.sticker { width:80px; cursor:pointer; border-radius:10px; }
-.controls, #emojiPanel, #stickerPanel { display:flex; gap:5px; margin-bottom:10px; flex-wrap:wrap; }
+.controls, #emojiPanel, #stickerPanel, #colorPanel { display:flex; gap:5px; margin-bottom:10px; flex-wrap:wrap; }
 button { background:#6c7cff; border:none; padding:6px 10px; border-radius:6px; color:white; cursor:pointer; }
-input, textarea { padding:6px; border-radius:6px; border:none; outline:none; }
+input, textarea, select { padding:6px; border-radius:6px; border:none; outline:none; }
 .reactions { display:flex; gap:3px; font-size:14px; margin-left:5px; cursor:pointer; }
 .reaction-btn { background:rgba(255,255,255,0.2); padding:2px 5px; border-radius:5px; }
 </style>
@@ -26,7 +26,7 @@ input, textarea { padding:6px; border-radius:6px; border:none; outline:none; }
 
 <header>
 <img id="avatar" src="https://i.imgur.com/4Z7QZ9F.png" alt="Аватар">
-<b>P2P Messenger с профилями</b>
+<b>P2P Messenger</b>
 </header>
 
 <!-- Настройка профиля -->
@@ -51,10 +51,17 @@ input, textarea { padding:6px; border-radius:6px; border:none; outline:none; }
 <div style="margin:10px;">
 <div>Ваш ID:</div>
 <div id="myid">loading...</div>
-
 <br>
 <input id="friendid" placeholder="ID друга">
 <button onclick="connect()">Connect</button>
+</div>
+
+<!-- Настройка цвета -->
+<div id="colorPanel">
+<label>Фон чата:</label>
+<input type="color" id="chatColor" value="#1a1f2b" onchange="updateChatColor()">
+<label>Цвет своих сообщений:</label>
+<input type="color" id="msgColor" value="#6c7cff">
 </div>
 
 <div id="emojiPanel">
@@ -69,6 +76,7 @@ input, textarea { padding:6px; border-radius:6px; border:none; outline:none; }
 <img src="https://i.imgur.com/1.png" onclick="sendSticker(this.src)" class="sticker">
 <img src="https://i.imgur.com/2.png" onclick="sendSticker(this.src)" class="sticker">
 <img src="https://i.imgur.com/3.png" onclick="sendSticker(this.src)" class="sticker">
+<img src="https://i.imgur.com/4.png" onclick="sendSticker(this.src)" class="sticker">
 </div>
 
 <div id="chat"></div>
@@ -87,17 +95,21 @@ let avatar = document.getElementById("profileAvatar").src;
 let name = document.getElementById("profileName").value;
 let desc = document.getElementById("profileDesc").value;
 
-// Обновление данных профиля при смене
+// Цвета
+let chatColor = document.getElementById("chatColor").value;
+let msgColor = document.getElementById("msgColor").value;
+
+// Обновление цвета чата
+function updateChatColor(){ document.getElementById("chat").style.background=document.getElementById("chatColor").value; }
+
+// Обновление профиля
 document.getElementById("profileAvatar").onchange = e => {
   let reader = new FileReader();
-  reader.onload = () => {
-    avatar = reader.result;
-    document.getElementById("profileAvatar").src = avatar;
-  };
+  reader.onload = () => { avatar = reader.result; document.getElementById("profileAvatar").src = avatar; sendProfile(); };
   reader.readAsDataURL(e.target.files[0]);
 };
-document.getElementById("profileName").oninput = e => { name = e.target.value; };
-document.getElementById("profileDesc").oninput = e => { desc = e.target.value; };
+document.getElementById("profileName").oninput = e => { name = e.target.value; sendProfile(); };
+document.getElementById("profileDesc").oninput = e => { desc = e.target.value; sendProfile(); };
 
 // Ваш ID
 peer.on("open", id => { document.getElementById("myid").innerText = id; });
@@ -114,64 +126,55 @@ function connect() {
 }
 
 // Настройка соединения
-function setup() {
-  // Приём данных
+function setup(){
   conn.on("data", data => {
     if(data.profile){
-      // Показываем профиль друга
       document.getElementById("friendProfile").style.display="flex";
       document.getElementById("friendAvatar").src = data.profile.avatar;
       document.getElementById("friendName").innerText = data.profile.name;
       document.getElementById("friendDesc").innerText = data.profile.desc;
     } else {
-      addMsg(data.text, data.avatar, data.sticker, data.reactionUpdates);
+      addMsg(data.text,data.avatar,data.sticker,data.reactionUpdates,true);
     }
   });
-  
-  // Отправляем свой профиль сразу после соединения
   sendProfile();
 }
 
 // Отправка профиля
-function sendProfile(){
-  if(conn) conn.send({profile:{avatar,name,desc}});
-}
+function sendProfile(){ if(conn) conn.send({profile:{avatar,name,desc}}); }
 
 // Смайлики
-function addEmoji(e) {
-  document.getElementById("msg").value += e;
-  document.getElementById("msg").focus();
-}
+function addEmoji(e){ document.getElementById("msg").value+=e; document.getElementById("msg").focus(); }
 
 // Стикеры
-function sendSticker(url){
+function sendSticker(url){ 
   if(!conn) return alert("Нет соединения");
-  let data = { text:"", avatar, sticker:url };
-  conn.send(data);
-  addMsg("", avatar, url);
+  let data = {text:"",avatar,msgColor,sticker:url};
+  conn.send(data); addMsg("",avatar,url,null,true);
 }
 
 // Отправка текста
 function send(){
   let text = document.getElementById("msg").value;
   if(!text || !conn) return;
-  let data = { text, avatar };
+  let data = {text,avatar,msgColor};
   conn.send(data);
-  addMsg(text, avatar);
+  addMsg(text,avatar,null,null,true);
   document.getElementById("msg").value="";
 }
 
 // Добавление сообщений в чат
-function addMsg(text,av,sticker=null,reactionUpdates=null){
-  let div = document.createElement("div");
+function addMsg(text,av,sticker=null,reactionUpdates=null,isOwn=false){
+  let div=document.createElement("div");
   div.className="msg";
+  let color = isOwn ? document.getElementById("msgColor").value : "#6c7cff";
   
   if(sticker){
     div.innerHTML=`<img src="${av}" class="avatar"><img src="${sticker}" class="sticker"><div class="reactions"></div>`;
   } else {
-    div.innerHTML=`<img src="${av}" class="avatar"><span onclick="addReaction(this)">${text}</span><div class="reactions"></div>`;
+    div.innerHTML=`<img src="${av}" class="avatar"><span style="background:${color}">${text}</span><div class="reactions"></div>`;
   }
-  
+
   document.getElementById("chat").appendChild(div);
   document.getElementById("chat").scrollTop = document.getElementById("chat").scrollHeight;
   
@@ -187,20 +190,19 @@ function addReaction(el){
   let counts = reactionsDiv.dataset.counts ? JSON.parse(reactionsDiv.dataset.counts) : {};
   counts[reaction] = (counts[reaction]||0)+1;
   reactionsDiv.dataset.counts = JSON.stringify(counts);
-  updateReactions(reactionsDiv, counts);
+  updateReactions(reactionsDiv,counts);
   
-  conn.send({reactionUpdates:{reaction, counts}});
+  conn.send({reactionUpdates:{reaction,counts}});
 }
 
-function updateReactions(div, counts){
+function updateReactions(div,counts){
   div.innerHTML="";
   for(let r in counts){
-    let span = document.createElement("span");
-    span.className="reaction-btn";
-    span.innerText = r+" "+counts[r];
+    let span=document.createElement("span");
+    span.className="reaction-btn"; span.innerText=r+" "+counts[r];
     div.appendChild(span);
   }
 }
 </script>
 </body>
-    </html>
+</html>
